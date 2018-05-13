@@ -1,0 +1,148 @@
+#Code to merge the independent and dependent variables.
+airbnb_train_y <- fread("airbnb_train_y.csv", header=T, na.strings="")
+airbnb_train_y$high_booking_rate <- ifelse(is.na(airbnb_train_y$high_booking_rate),0,airbnb_train_y$high_booking_rate)
+airbnb_train_y$high_booking_rate <- as.numeric(airbnb_train_y$high_booking_rate)
+airbnb_train_y$high_booking_rate <- ifelse(is.na(airbnb_train_y$high_booking_rate),0,airbnb_train_y$high_booking_rate)
+airbnb_train_y$V1 <- as.numeric(airbnb_train_y$V1)
+colnames(airbnb)[colnames(airbnb)=="V1"] <- "ID"
+airbnb$ID <- as.numeric(airbnb$ID)
+colnames(airbnb_train_y)[colnames(airbnb_train_y)=="V1"] <- "ID"
+airbnb <- merge(airbnb,airbnb_train_y,by="ID")
+rm(airbnb_train_y)
+
+#Calculating the number of years since he has been a host. 
+airbnb$host_since <- as.numeric(airbnb$host_since)
+airbnb$host_since_year <- as.Date(airbnb$host_since,origin = "1899-12-30")
+airbnb$Year <- as.numeric(format(as.Date(airbnb$host_since,origin = "1899-12-30"),"%Y"))
+airbnb$year_since_host <- ifelse(is.na(airbnb$Year),0,2018-airbnb$Year)
+
+
+#calulating the number of years since the listing got its first review
+airbnb$first_review <- as.numeric(airbnb$first_review)
+airbnb$Year_first_review <- as.numeric(format(as.Date(airbnb$first_review,origin = "1899-12-30"),"%Y"))
+airbnb$year_since_first_review <- ifelse(is.na(airbnb$Year_first_review),0,2018-airbnb$Year_first_review)
+
+#Replacing the missing value of the number of people the listing can accomodate with the mean value of the data set. 
+airbnb$accommodates <- as.numeric(airbnb$accommodates)
+airbnb$accommodates <- ifelse(is.na(airbnb$accommodates) ==TRUE, round(mean(airbnb$accommodates, na.rm=TRUE)),airbnb$accommodates)
+airbnb$accommodates <- as.numeric(airbnb$accommodates)
+
+#Found that the number of people that the listing could accomodate was less than the number of extra people the listing could hold. 
+# Correcting those listings to have the accomodates as the number of extra people + the value of accomodates. 
+which((airbnb$accommodates - airbnb$guests_included) < 0)
+airbnb$extrapeople_allowed <- ifelse((airbnb$accommodates - airbnb$guests_included) < 0,-1,(airbnb$accommodates - airbnb$guests_included))
+airbnb$accomodates_new <- ifelse(((airbnb$accommodates-airbnb$guests_included)<0),(airbnb$accommodates+airbnb$guests_included),airbnb$accommodates)
+
+#availability_30: Replace the missgin values with the mean
+airbnb$availability_30 <- as.numeric(airbnb$availability_30)
+airbnb$availability_30 <- ifelse(is.na(airbnb$availability_30) ==TRUE, round(mean(airbnb$availability_30, na.rm=TRUE)),airbnb$availability_30)
+
+
+#Bathrooms: Replace the missgin values with the mean
+airbnb$bathrooms<- as.numeric(as.character(airbnb$bathrooms))
+airbnb$bathrooms <- ifelse(is.na(airbnb$bathrooms) ==TRUE, round(mean(airbnb$bathrooms, na.rm=TRUE)),airbnb$bathrooms)
+
+#beds : Replace the missgin values with the mean
+airbnb$beds<- as.numeric(as.character(airbnb$beds))
+airbnb$beds <- ifelse(is.na(airbnb$beds) ==TRUE, round(mean(airbnb$beds, na.rm=TRUE)),airbnb$beds)
+airbnb$beds <- ifelse(airbnb$beds > 40, 40,airbnb$beds)
+
+#bed_type : Replace the missgin values with the most common factor. 
+airbnb$bed_type <- as.character(airbnb$bed_type)
+airbnb$bed_type <- ifelse(str_detect(airbnb$bed_type,"1"),"Real Bed" ,airbnb$bed_type)
+airbnb$bed_type <- ifelse(is.na(airbnb$bed_type),"Real Bed" ,airbnb$bed_type)
+airbnb$bed_type <- as.factor(airbnb$bed_type)
+
+#bedrooms: Replace the missgin values with the mean
+airbnb$bedrooms<- as.numeric(as.character(airbnb$bedrooms))
+airbnb$bedrooms <- ifelse(is.na(airbnb$bedrooms) ==TRUE, round(mean(airbnb$bedrooms, na.rm=TRUE)),airbnb$bedrooms)
+
+#cancellation policy : Replace the junk values with other. 
+#replacing no_refunds as no such data in the test dataset and test and training data have different levels of factors which causes errors in the predictions. 
+airbnb$cancellation_policy <- ifelse(str_detect(airbnb$cancellation_policy,"1"),"other" ,airbnb$cancellation_policy)
+airbnb$cancellation_policy <- ifelse(str_detect(airbnb$cancellation_policy,"2"),"other" ,airbnb$cancellation_policy)
+airbnb$cancellation_policy <- ifelse(str_detect(airbnb$cancellation_policy,"5"),"other" ,airbnb$cancellation_policy)
+airbnb$cancellation_policy <- ifelse(airbnb$cancellation_policy == "no_refunds","other" ,airbnb$cancellation_policy)
+airbnb$cancellation_policy <- as.factor(airbnb$cancellation_policy)
+
+
+
+#cleaning Fee : Replace the missing values with the mean
+airbnb$cleaning_fee <- gsub("\\$","",airbnb$cleaning_fee)
+airbnb$cleaning_fee <- gsub("\\,","",airbnb$cleaning_fee)
+airbnb$cleaning_fee[(airbnb$cleaning_fee == "f" | airbnb$cleaning_fee == "t")] <- NA
+airbnb$cleaning_fee <- as.numeric(airbnb$cleaning_fee)
+airbnb$cleaning_fee <- ifelse(is.na(airbnb$cleaning_fee),0,airbnb$cleaning_fee) #converted the NA to zero for lack of any better option.
+
+
+#Extra_people :Replace the missing values with the mean
+#Replace the values greater than 5000 with 5000. 
+airbnb$extra_people <- gsub("\\$","",airbnb$extra_people)
+airbnb$extra_people <- gsub(".\\.","",airbnb$extra_people)
+airbnb$extra_people <- as.numeric(airbnb$extra_people)
+airbnb$extra_people <- ifelse(airbnb$extra_people > 5000, 5000, airbnb$extra_people)
+
+#host_listing Count : Replace the missing values with the mean
+airbnb$host_listings_count<- as.numeric(as.character(airbnb$host_listings_count))
+airbnb$host_listings_count <- ifelse(is.na(airbnb$host_listings_count) ==TRUE, round(mean(airbnb$host_listings_count, na.rm=TRUE)),airbnb$host_listings_count)
+
+#Price : Replace the missing values with the mean
+airbnb$price <- gsub("\\$","",airbnb$price)
+airbnb$price <- gsub("\\,","",airbnb$price)
+airbnb$price <- as.numeric(airbnb$price)
+airbnb$price <- ifelse(is.na(airbnb$price) ==TRUE, mean(airbnb$price, na.rm=TRUE),airbnb$price)
+
+
+#weekly_price : Replace the missing values with the price for a single day into 7 days. 
+airbnb$weekly_price <- gsub("\\$","",airbnb$weekly_price)
+airbnb$weekly_price <- gsub("\\,","",airbnb$weekly_price)
+airbnb$weekly_price <- as.numeric(airbnb$weekly_price)
+airbnb$weekly_price <- ifelse(is.na(airbnb$weekly_price) ==TRUE, airbnb$price*7,airbnb$weekly_price)
+
+# creating a factor to see if the weekly price if different than the daily price multiplied with 7.
+airbnb$price_diff_week <- ifelse(airbnb$price*7 == airbnb$weekly_price,0,1)
+count(airbnb,"price_diff_week")
+
+
+#property Type : Replace the missing values with the mean
+# have to remove certain property type factors because they are are not present in the test data set. MisMatch of factor levels 
+count(airbnb,"property_type")
+airbnb$property_type <- tolower(airbnb$property_type)
+airbnb$property_type <- ifelse(str_detect(airbnb$property_type,"&"),"bed and breakfast" ,airbnb$property_type)
+airbnb$property_type <- ifelse(is.na(airbnb$property_type),"apartment",airbnb$property_type)
+airbnb$property_type <- ifelse(airbnb$property_type == "casa particular (cuba)","bed and breakfast",airbnb$property_type)
+airbnb$property_type <- ifelse(airbnb$property_type == "aparthotel","serviced apartment",airbnb$property_type)
+airbnb$property_type <- ifelse(airbnb$property_type == "farm stay","other",airbnb$property_type)
+airbnb$property_type <- ifelse(airbnb$property_type == "nature lodge","other",airbnb$property_type)
+airbnb$property_type <- ifelse(airbnb$property_type == "train","other",airbnb$property_type)
+airbnb$property_type <- ifelse(airbnb$property_type == "barn","other",airbnb$property_type)
+airbnb$property_type <- ifelse(airbnb$property_type == "plane","other",airbnb$property_type)
+airbnb$property_type <- ifelse(airbnb$property_type == "lighthouse","other",airbnb$property_type)
+airbnb$property_type <- ifelse(airbnb$property_type == "cave","other",airbnb$property_type)
+airbnb$property_type <- as.factor(airbnb$property_type)
+
+#available_90 : Replace missing values with the median value
+airbnb$availability_90<- as.integer(as.character(airbnb$availability_90))
+airbnb$availability_90[is.na(airbnb$availability_90)]<-median(airbnb$availability_90,na.rm = T)
+
+#availability_60
+airbnb$availability_60<- as.integer(as.character(airbnb$availability_60))
+airbnb$availability_60[is.na(airbnb$availability_60)]<-median(airbnb$availability_60,na.rm = T)
+
+#availability_365
+airbnb$availability_365<- as.integer(as.character(airbnb$availability_365))
+airbnb$availability_365[is.na(airbnb$availability_365)]<-median(airbnb$availability_365,na.rm = T)
+
+count(airbnb, "host_identity_verified")
+#ib_max <- max(ib_count$freq)
+#ib_row <- as.numeric(which(ib_count$freq == max(ib_count$freq)))
+#ib_replace <- as.character(droplevels(ib_count$host_identity_verified[ib_row]))
+airbnb$host_identity_verified[!(airbnb$host_identity_verified == "f" | airbnb$host_identity_verified == "t") | is.na(airbnb$host_identity_verified)] <- "t"
+#end if code added  by utkarsh
+
+airbnb$host_identity_verified <- (sub("f", "0",airbnb$host_identity_verified,fixed=TRUE))
+airbnb$host_identity_verified <- (sub("t", "1",airbnb$host_identity_verified,fixed=TRUE))
+airbnb$host_identity_verified<- as.integer(as.character(airbnb$host_identity_verified))
+airbnb$host_identity_verified[is.na(airbnb$host_identity_verified)]<-1
+count(airbnb,"host_identity_verified")
+airbnb$host_identity_verified <- as.factor(airbnb$host_identity_verified)
