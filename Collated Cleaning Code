@@ -133,16 +133,21 @@ airbnb$availability_60[is.na(airbnb$availability_60)]<-median(airbnb$availabilit
 airbnb$availability_365<- as.integer(as.character(airbnb$availability_365))
 airbnb$availability_365[is.na(airbnb$availability_365)]<-median(airbnb$availability_365,na.rm = T)
 
-count(airbnb, "host_identity_verified")
-#ib_max <- max(ib_count$freq)
-#ib_row <- as.numeric(which(ib_count$freq == max(ib_count$freq)))
-#ib_replace <- as.character(droplevels(ib_count$host_identity_verified[ib_row]))
+#replacing factor with most common class. 
 airbnb$host_identity_verified[!(airbnb$host_identity_verified == "f" | airbnb$host_identity_verified == "t") | is.na(airbnb$host_identity_verified)] <- "t"
-#end if code added  by utkarsh
-
+#convert  t and f to 1 and 0 respectively. 
 airbnb$host_identity_verified <- (sub("f", "0",airbnb$host_identity_verified,fixed=TRUE))
 airbnb$host_identity_verified <- (sub("t", "1",airbnb$host_identity_verified,fixed=TRUE))
 airbnb$host_identity_verified<- as.integer(as.character(airbnb$host_identity_verified))
 airbnb$host_identity_verified[is.na(airbnb$host_identity_verified)]<-1
-count(airbnb,"host_identity_verified")
 airbnb$host_identity_verified <- as.factor(airbnb$host_identity_verified)
+
+#creating a new factor for blank values which is "o".
+airbnb$host_has_profile_pic[!(airbnb$host_has_profile_pic == "f" | airbnb$host_has_profile_pic == "t")] <- "f"
+airbnb$host_has_profile_pic <- ifelse(is.na(airbnb$host_has_profile_pic),"o",airbnb$host_has_profile_pic)
+airbnb$host_has_profile_pic <- as.factor(airbnb$host_has_profile_pic)
+
+#Creating 
+airbnb$host_is_superhost[!(airbnb$host_is_superhost == "f" | airbnb$host_is_superhost == "t")] <- "f"
+airbnb$host_is_superhost <- ifelse(is.na(airbnb$host_is_superhost),"O",airbnb$host_is_superhost)
+airbnb$host_is_superhost <- as.factor(airbnb$host_is_superhost)
