@@ -1,0 +1,190 @@
+library("stringr")
+library(data.table)
+library(glmnet)
+library(tree)
+library(class)
+library(dplyr)
+library(plyr)
+library(mlbench)
+library(caret)
+library(randomForest)
+library(gbm)
+library(neuralnet)
+library(parallel)
+library(doParallel)
+detach("package:dplyr",unload=TRUE)
+
+
+
+airbnb<-read.csv("Clean_Train.csv")
+airbnb$price_per_person <- airbnb$price/airbnb$accommodates
+airbnb$property_type <- as.character(airbnb$property_type)
+airbnb$property_type <- ifelse(airbnb$property_type == "cave","other",airbnb$property_type)
+airbnb$property_type <- as.factor(airbnb$property_type)
+unique(airbnb$property_type)
+dmy <- dummyVars(" ~ property_type", data = airbnb)
+trsf <- data.frame(predict(dmy, newdata = airbnb))
+str(trsf)
+trsf$ID <- 1:nrow(trsf)
+airbnb <- merge(airbnb,trsf,by="ID")
+airbnb$property_type <- NULL
+
+str(airbnb$bed_type)
+airbnb$ID <-NULL
+airbnb$V1 <- NULL
+airbnb$review_scores_rating <- NULL
+
+
+cluster <- makeCluster(detectCores() - 2) # convention to leave 1 core for OS
+registerDoParallel(cluster)
+
+fitControl <- trainControl(method = "cv",
+                           number = 10,
+                           allowParallel = TRUE)
+?preProcess
+
+airbnb$high_booking_rate<-as.factor(airbnb$high_booking_rate)
+str(airbnb$high_booking_rate)
+str(airbnb$property_type)
+airbnb$cancellation_policy.x <- NULL
+
+## Making Train and Validation Split
+
+set.seed(34521)
+index <- createDataPartition(airbnb$high_booking_rate, p=0.75, list=FALSE)
+trainSet <- airbnb[ index,]
+testSet <- airbnb[-index,]
+
+class(trainSet$score)
+
+#Labling Predictors and Outcome Variable
+
+outcomeName<-'high_booking_rate'
+predictors<-names(airbnb)[!names(airbnb) %in% outcomeName]
+rm(airbnb,dmy,trsf)
+#write.csv(predictors,"list.csv")
+#save(model_gbm, file = "gbm.rda")
+#summary(airbnb$review_scores_rating)
+#str(airbnb)
+###### models #######
+
+trainSet <- na.omit(trainSet)
+
+model_gbm<-train(trainSet[,predictors],trainSet[,outcomeName],method='gbm',trControl=fitControl)
+#model_rf<-train(trainSet[,predictors],trainSet[,outcomeName],method='rf')
+#model_nnet<-train(trainSet[,predictors],trainSet[,outcomeName],method='nnet')
+#model_mda<-train(trainSet[,predictors],trainSet[,outcomeName],method='mda')
+imp_of_variables <- summary(model_gbm)
+
+####### Prediction
+predictions_log<-predict.train(object=model_gbm,testSet[,predictors],type="raw")
+table(predictions_log)
+confusionMatrix_gbm<- confusionMatrix(predictions_log,testSet[,outcomeName])
+confusionMatrix_gbm
+
+str(imp_of_variables)
+airbnb[,c(imp_of_variables[imp_of_variables$rel.inf==0,1])] <- NULL
+
+###### running the best model on test data
+
+airbnb_test <- read.csv("Clean_Test.csv")
+
+# create the dummy variables for the property type columns
+airbnb_test$property_type <- as.character(airbnb_test$property_type)
+airbnb_test$property_type <- tolower(airbnb_test$property_type)
+airbnb_test$property_type <- ifelse(str_detect(airbnb_test$property_type,"&"),"bed and breakfast" ,airbnb_test$property_type)
+airbnb_test$property_type <- as.factor(airbnb_test$property_type)
+dmy <- dummyVars(" ~ . ", data = airbnb_test)
+trsf <- data.frame(predict(dmy, newdata = airbnb_test))
+str(trsf)
+trsf$ID <- 1:nrow(trsf)
+airbnb_test <- trsf
+#airbnb_test <- merge(airbnb_test,trsf,by="ID")
+#airbnb_test$property_type <- NULL
+
+count(airbnb_test,"bed_type")
+airbnb_test$bed_type <- as.character(airbnb_test$bed_type)
+airbnb_test$bed_type <- ifelse(str_detect(airbnb_test$bed_type,"1"),"Real Bed" ,airbnb_test$bed_type)
+airbnb_test$bed_type <- ifelse(is.na(airbnb_test$bed_type),"Real Bed" ,airbnb_test$bed_type)
+count(airbnb_test,"bed_type")
+class(airbnb_test$bed_type)
+airbnb_test$bed_type <- as.factor(airbnb_test$bed_type)
+class(airbnb_test$bed_type)
+
+count(airbnb_test,"require_guest_profile_picture")
+airbnb_test$require_guest_profile_picture <- as.character(airbnb_test$require_guest_profile_picture)
+airbnb_test$require_guest_profile_picture <- (sub("f", "0",airbnb_test$require_guest_profile_picture,fixed=TRUE))
+airbnb_test$require_guest_profile_picture <- (sub("t", "1",airbnb_test$require_guest_profile_picture,fixed=TRUE))
+airbnb_test$require_guest_profile_picture <- as.integer(airbnb_test$require_guest_profile_picture)
+count(airbnb_test,"require_guest_profile_picture")
+
+airbnb_test$maximum_nights <- as.numeric(airbnb_test$maximum_nights)
+airbnb_test$minimum_nights <- as.numeric(airbnb_test$minimum_nights)
+
+x<- predict(model_gbm, newdata = test, type = "raw")
+table(x)
+write.csv(x,"pred.csv")
+
+plot(model_gbm)
+
+str(airbnb_test)
+
+x<- predict(model_fr, newdata = airbnb_test, type = "raw")
+table(x)
+write.csv(x,"pred_29.csv")
+
+plot(model_fr)
+
+
+
+
+
+######################BART####################################
+
+
+
+stopCluster(cluster)
+confusionMatrix.train(model_gbm)
+
+
+#######################################################################
+#RANDOM FORREST Implementation
+
+model_fr<-train(trainSet[,predictors],trainSet[,outcomeName],method='rf',trControl=fitControl)
+summary(model_fr)
+varImp(model_fr)$importance
+predictions_rf<-predict.train(object=model_fr,testSet[,predictors],type="raw")
+table(predictions_rf)
+confusionMatrix_rf<- confusionMatrix(predictions_rf,testSet[,outcomeName])
+confusionMatrix_rf
+
+library(tibble)
+
+impvalue <- varImp(model_fr)$importance
+
+impvalue <- impvalue[order(impvalue$Overall),c(1)]
+
+varImp(model_fr)$importance %>% 
+  as.data.frame() %>%
+  rownames_to_column() %>%
+  arrange(Overall) %>%
+  mutate(rowname = forcats::fct_inorder(rowname )) %>%
+  ggplot()+
+  geom_col(aes(x = rowname, y = Overall))+
+  coord_flip()+
+  theme_bw()
+
+######################################################################################
+#par RF implementation
+model_PARrf<-train(trainSet[,predictors],trainSet[,outcomeName],method='parRF',trControl=fitControl)
+summary(model_PARrf)
+predictions_rf_par<-predict.train(object=model_PARrf,testSet[,predictors],type="raw")
+table(predictions_rf_par)
+confusionMatrix_rf_par<- confusionMatrix(predictions_rf_par,testSet[,outcomeName])
+confusionMatrix_rf_par
+# .8282 accuracy
+
+
+
+rm(airbnb,cluster,index,testSet,trainSet,predictions_log,predictions_rf,predictors,outcomeName,fitControl)
+rm(confusionMatrix_gbm,airbnb_train,airbnb_merge,model_gbm,predictions_rf_par)
